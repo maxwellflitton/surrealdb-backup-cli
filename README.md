@@ -1,2 +1,3 @@
 # surrealdb-backup-cli
-basic tool for backing up surrealDB databases for testing
+
+This binary backs up the `RocksDB` KV store used by `surrealdb` to a a `SST` file.
