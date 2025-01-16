@@ -289,13 +289,13 @@ jobs:
         shell: bash
         run: |
           if [[ -f "target/release/surrealdb-backup" ]]; then
-            cp target/release/surrealdb-backup .
+            cp target/release/surrealdb-backup ./surrealdb_backup
           elif [[ -f "target/aarch64-unknown-linux-gnu/release/surrealdb-backup" ]]; then
-            cp target/aarch64-unknown-linux-gnu/release/surrealdb-backup .
+            cp target/aarch64-unknown-linux-gnu/release/surrealdb-backup ./surrealdb_backup
           elif [[ -f "target/x86_64-unknown-linux-gnu/release/surrealdb-backup" ]]; then
-            cp target/x86_64-unknown-linux-gnu/release/surrealdb-backup .
+            cp target/x86_64-unknown-linux-gnu/release/surrealdb-backup ./surrealdb_backup
           elif [[ -f "target/release/surrealdb-backup.exe" ]]; then
-            cp target/release/surrealdb-backup.exe .
+            cp target/release/surrealdb-backup.exe ./surrealdb_backup
           else
             echo "No binary to copy for this OS."
           fi          
