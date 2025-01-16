@@ -295,7 +295,7 @@ jobs:
           elif [[ -f "target/x86_64-unknown-linux-gnu/release/surrealdb-backup" ]]; then
             cp target/x86_64-unknown-linux-gnu/release/surrealdb-backup ./surrealdb_backup
           elif [[ -f "target/release/surrealdb-backup.exe" ]]; then
-            cp target/release/surrealdb-backup.exe ./surrealdb_backup
+            cp target/release/surrealdb-backup.exe ./surrealdb_backup.exe
           else
             echo "No binary to copy for this OS."
           fi          
@@ -330,14 +330,14 @@ jobs:
         with:
           name: "${{ env.FILENAME }}"
           format: "tar.gz"
-          include: "{surrealdb-backup,surrealdb-backup.exe,README.md}"
+          include: "{surrealdb_backup,surrealdb_backup.exe,README.md}"
 
       - name: Compress zip
         uses: ksm2/archive-action@v1
         with:
           name: "${{ env.FILENAME }}"
           format: "zip"
-          include: "{surrealdb-backup,surrealdb-backup.exe,README.md}"
+          include: "{surrealdb_backup,surrealdb_backup.exe,README.md}"
 
       - name: Create or Update Release
         env:
