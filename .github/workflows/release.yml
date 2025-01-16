@@ -1,0 +1,331 @@
+name: Release to Github
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Type of release (major/minor/patch)'
+        required: true
+        default: 'minor'
+      dry_run:
+        description: 'Dry run (true/false)'
+        required: true
+        default: true
+      skip_tests:
+        description: 'Skip tests (true/false)'
+        required: true
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        platform:
+          - os: ubuntu-latest
+            linux-override: false
+          - os: macos-13
+            linux-override: false
+          - os: macos-14
+            linux-override: false
+          - os: windows-latest
+            linux-override: false
+          - os: ubuntu-latest
+            linux-override: true
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Ensure Cargo Directories Exist for Cache Restore
+        run: |
+          mkdir -p ~/.cargo/registry
+          mkdir -p ~/.cargo/index
+          mkdir -p target          
+        shell: bash
+
+      - name: Cache Cargo Registry, Index, Build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/index
+            target            
+          key: ${{ runner.os }}-${{ runner.arch }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: |
+            cargo-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/Cargo.toml') }}
+            cargo-build-${{ runner.os }}-${{ runner.arch }}-            
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Build
+        run: cargo build --verbose
+
+  prepare-release:
+    needs: [test]
+    runs-on: ubuntu-latest
+    outputs:
+      rr_cargo_version: ${{ steps.get-version.outputs.VERSION }}
+      workflow_git_tag: ${{ steps.get-version.outputs.WORKFLOW_GIT_TAG }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+    
+      - name: Install Rust Target for linx Arm if needed
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform.linux-override }}" = "true" ]; then
+            rustup target add aarch64-unknown-linux-gnu
+          fi
+
+      - name: Ensure Cargo Directories Exist for Cache Restore
+        run: |
+          mkdir -p ~/.cargo/registry
+          mkdir -p ~/.cargo/index
+          mkdir -p target          
+        shell: bash
+    
+      - name: Determine Cache Key
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform.linux-override }}" = "true" ]; then
+            echo "CACHE_KEY=linux-arm64" >> $GITHUB_ENV
+            echo "SECOND_CACHE_KEY=linux-arm64" >> $GITHUB_ENV
+          else
+            DEFAULT_KEY="${{ runner.os }}-${{ runner.arch }}"
+            SECOND_DEFAULT_KEY="${{ runner.os }}-${{ runner.arch }}"
+            echo "CACHE_KEY=$DEFAULT_KEY" >> $GITHUB_ENV
+            echo "SECOND_CACHE_KEY=$SECOND_DEFAULT_KEY" >> $GITHUB_ENV
+          fi
+
+      - name: Cache Cargo Registry, Index, Build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/index
+            target            
+          key: ${{ env.CACHE_KEY }}
+          restore-keys: |
+            cargo-build-${{ env.CACHE_KEY }}-${{ hashFiles('**/Cargo.toml') }}
+            cargo-build-${{ env.SECOND_CACHE_KEY }}-         
+
+      - name: Cache Cargo Binaries
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/bin
+          key: cargo-bin-${{ env.CACHE_KEY }}-v1
+          restore-keys: |
+            cargo-bin-${{ env.CACHE_KEY }}-            
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-release
+        run: |
+          if ! command -v cargo-release &> /dev/null; then
+            echo "Installing cargo-release..."
+            cargo install cargo-release
+          else
+            INSTALLED_VERSION=$(cargo release --version || echo "unknown")
+            echo "cargo-release already installed (version: $INSTALLED_VERSION). Skipping installation."
+          fi          
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"          
+
+      - name: Update Cargo.toml version and push to GitHub
+        run: |
+          REL_TYPE=${{ github.event.inputs.type }}
+          DRY_RUN=${{ github.event.inputs.dry_run }}
+
+          # Execute version update
+          if [ "$DRY_RUN" = "false" ]; then
+            echo "Updating version in Cargo.toml"
+            cargo release --verbose --execute --no-confirm $REL_TYPE --no-publish --no-verify
+          else
+            echo "Dry run: showing changes without executing"
+            cargo release --verbose $REL_TYPE --no-publish --no-verify
+          fi          
+
+      - name: Get Version from Cargo.toml
+        id: get-version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "WORKFLOW_GIT_TAG=v$VERSION" >> "$GITHUB_OUTPUT"          
+
+  release:
+    needs: [prepare-release]
+    if: ${{ github.event.inputs.dry_run == 'false' }}
+    strategy:
+      matrix:
+        platform:
+          - os: ubuntu-latest
+            linux-override: false
+          - os: macos-13
+            linux-override: false
+          - os: macos-14
+            linux-override: false
+          - os: windows-latest
+            linux-override: false
+          - os: ubuntu-latest
+            linux-override: true
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Ensure Cargo Directories Exist for Cache Restore
+        run: |
+          mkdir -p ~/.cargo/registry
+          mkdir -p ~/.cargo/index
+          mkdir -p target          
+        shell: bash
+    
+      - name: Install Rust Target for linx Arm if needed
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform.linux-override }}" = "true" ]; then
+            rustup target add aarch64-unknown-linux-gnu
+          fi
+
+      - name: Determine Cache Key
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform.linux-override }}" = "true" ]; then
+            echo "CACHE_KEY=linux-arm64" >> $GITHUB_ENV
+            echo "SECOND_CACHE_KEY=linux-arm64" >> $GITHUB_ENV
+          else
+            DEFAULT_KEY="${{ runner.os }}-${{ runner.arch }}"
+            SECOND_DEFAULT_KEY="${{ runner.os }}-${{ runner.arch }}"
+            echo "CACHE_KEY=$DEFAULT_KEY" >> $GITHUB_ENV
+            echo "SECOND_CACHE_KEY=$SECOND_DEFAULT_KEY" >> $GITHUB_ENV
+          fi
+      - name: Cache Cargo Registry, Index, Build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/index
+            target
+          key: ${{ env.CACHE_KEY }}
+          restore-keys: |
+            cargo-build-${{ env.CACHE_KEY }}-${{ hashFiles('**/Cargo.toml') }}
+            cargo-build-${{ env.SECOND_CACHE_KEY }}-
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+    
+      - name: Install Rust Target
+        if: ${{ matrix.platform.linux-override == true }}
+        run: rustup target add aarch64-unknown-linux-gnu
+        
+      - name: Install ARM Dependencies
+        if: ${{ matrix.platform.linux-override == true }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-aarch64-linux-gnu
+    
+      - name: Build for ARM (Static Binary)
+        if: ${{ matrix.platform.linux-override == true }}
+        env:
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: cargo build -p surrealdb-backup --release --target aarch64-unknown-linux-gnu --verbose
+    
+      - name: Build for x86 Linux (Static Binary)
+        if: ${{ matrix.platform.linux-override == false && matrix.platform.os == 'ubuntu-latest' }}
+        env:
+          CC_x86_64_unknown_linux_gnu: gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: gcc
+          RUSTFLAGS: "-C target-feature=+crt-static"
+        run: cargo build -p surrealdb-backup --release --target x86_64-unknown-linux-gnu --verbose
+
+      - name: Build Release
+        if: ${{ matrix.platform.linux-override == false && matrix.platform.os != 'ubuntu-latest' }}
+        # if: ${{ matrix.platform.linux-override == false }}
+        shell: bash
+        env:
+            RUSTFLAGS: "-C target-feature=+crt-static"
+        run: cargo build -p surrealdb-backup --release --verbose
+
+      - name: Copy release binary to root
+        shell: bash
+        run: |
+          if [[ -f "target/release/surrealdb-backup" ]]; then
+            cp target/release/surrealdb-backup .
+          elif [[ -f "target/aarch64-unknown-linux-gnu/release/surrealdb-backup" ]]; then
+            cp target/aarch64-unknown-linux-gnu/release/surrealdb-backup .
+          elif [[ -f "target/x86_64-unknown-linux-gnu/release/surrealdb-backup" ]]; then
+            cp target/x86_64-unknown-linux-gnu/release/surrealdb-backup .
+          elif [[ -f "target/release/surrealdb-backup.exe" ]]; then
+            cp target/release/surrealdb-backup.exe .
+          else
+            echo "No binary to copy for this OS."
+          fi          
+
+      - name: Get Build Info
+        id: build-info
+        shell: bash
+        run: |
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          if [ "${{ matrix.platform.linux-override }}" = "true" ]; then
+            TARGET="arm64-unknown-linux-gnu"
+            ARCH="arm64"
+          else
+            ARCH=$(uname -m)
+            TARGET=""
+              case "$OS" in
+              linux) TARGET="$ARCH-unknown-linux-gnu" ;;
+              darwin) TARGET="$ARCH-apple-darwin" ;;
+              msys*|cygwin*|mingw*) TARGET="$ARCH-pc-windows-msvc" ;;
+            esac
+          fi
+
+          VERSION=$(grep '^version = ' ./dock_pack/Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          FILENAME="surrealdb-backup-v${VERSION}-${TARGET}"
+          echo "OS=$OS" >> "$GITHUB_ENV"
+          echo "ARCH=$ARCH" >> "$GITHUB_ENV"
+          echo "TARGET=$TARGET" >> "$GITHUB_ENV"
+          echo "FILENAME=$FILENAME" >> "$GITHUB_ENV"          
+
+      - name: Compress tar.gz
+        uses: ksm2/archive-action@v1
+        with:
+          name: "${{ env.FILENAME }}"
+          format: "tar.gz"
+          include: "{surrealdb-backup,surrealdb-backup.exe,README.md}"
+
+      - name: Compress zip
+        uses: ksm2/archive-action@v1
+        with:
+          name: "${{ env.FILENAME }}"
+          format: "zip"
+          include: "{surrealdb-backup,surrealdb-backup.exe,README.md}"
+
+      - name: Create or Update Release
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.rr_cargo_version }}
+          WORKFLOW_GIT_TAG: ${{ needs.prepare-release.outputs.workflow_git_tag}}
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "${{ env.FILENAME }}.tar.gz,${{ env.FILENAME }}.zip"
+          allowUpdates: 'true'
+          generateReleaseNotes: 'true'
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag: ${{ env.WORKFLOW_GIT_TAG }}

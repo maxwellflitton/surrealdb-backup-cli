@@ -1,3 +1,17 @@
+//! A command-line interface for managing SurrealDB backups.
+//!
+//! # Overview
+//! This application provides a simple way to manage backups for SurrealDB by packing and unpacking Docker images into a specified directory.
+//! It leverages the `clap` crate for parsing command-line arguments and delegates packing and unpacking operations to corresponding modules.
+//!
+//! # Features
+//! - Command-line interface for executing `pack` and `unpack` actions.
+//! - Validates required arguments and provides error messages for missing or invalid inputs.
+//! - Extensible architecture to add more commands or options as needed.
+//!
+//! # Commands
+//! - `pack`: Packages a database directory into an SST file.
+//! - `unpack`: Extracts an SST file into a database directory.
 use clap::{Arg, Command};
 
 mod unpack;
