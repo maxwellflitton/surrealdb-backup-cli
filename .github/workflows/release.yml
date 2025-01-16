@@ -84,6 +84,12 @@ jobs:
           if [ "${{ matrix.platform.linux-override }}" = "true" ]; then
             rustup target add aarch64-unknown-linux-gnu
           fi
+    
+      - name: Install Cross-Compilation Toolchain
+        if: ${{ matrix.platform.linux-override == true }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-aarch64-linux-gnu
 
       - name: Ensure Cargo Directories Exist for Cache Restore
         run: |
@@ -200,6 +206,13 @@ jobs:
           if [ "${{ matrix.platform.linux-override }}" = "true" ]; then
             rustup target add aarch64-unknown-linux-gnu
           fi
+        
+      - name: Install Cross-Compilation Toolchain
+        shell: bash
+        if: ${{ matrix.platform.linux-override == true }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-aarch64-linux-gnu
 
       - name: Determine Cache Key
         shell: bash
@@ -231,8 +244,16 @@ jobs:
           toolchain: stable
     
       - name: Install Rust Target
+        shell: bash
         if: ${{ matrix.platform.linux-override == true }}
         run: rustup target add aarch64-unknown-linux-gnu
+    
+      - name: Install Cross-Compilation Toolchain
+        if: ${{ matrix.platform.linux-override == true }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-aarch64-linux-gnu
         
       - name: Install ARM Dependencies
         if: ${{ matrix.platform.linux-override == true }}
