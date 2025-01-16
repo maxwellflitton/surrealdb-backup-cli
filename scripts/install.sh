@@ -53,3 +53,6 @@ curl -LO "$DOWNLOAD_URL"
 # Unzip the downloaded file
 echo "Unzipping $FILENAME..."
 unzip -o "$FILENAME"
+
+echo "Cleaning up: Removing $FILENAME..."
+rm -f "$FILENAME"
