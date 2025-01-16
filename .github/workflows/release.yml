@@ -318,7 +318,7 @@ jobs:
             esac
           fi
 
-          VERSION=$(grep '^version = ' ./dock_pack/Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          VERSION=$(grep '^version = ' ./surrealdb-backup/Cargo.toml | sed -E 's/version = "(.*)"/\1/')
           FILENAME="surrealdb-backup-v${VERSION}-${TARGET}"
           echo "OS=$OS" >> "$GITHUB_ENV"
           echo "ARCH=$ARCH" >> "$GITHUB_ENV"
