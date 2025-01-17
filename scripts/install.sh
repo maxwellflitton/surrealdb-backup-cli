@@ -43,7 +43,7 @@ case "$OS" in
 esac
 
 # Define download URL
-VERSION="v0.1.4"
+VERSION="v0.1.0"
 FILENAME="surrealdb-backup-${VERSION}-${TARGET}.zip"
 DOWNLOAD_URL="https://github.com/maxwellflitton/surrealdb-backup-cli/releases/download/v/$FILENAME"
 # Download the zip file
