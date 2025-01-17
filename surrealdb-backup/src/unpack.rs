@@ -40,8 +40,11 @@ pub fn create_rocksdb_with_sst(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Ensure the database path exists
     if !Path::new(db_path).exists() {
+        println!("Creating database directory: {}", db_path);
         fs::create_dir_all(db_path)?;
     }
+
+    println!("SST {}", sst_dir);
 
     let mut options = Options::default();
     options.create_if_missing(true);
@@ -49,16 +52,9 @@ pub fn create_rocksdb_with_sst(
     // Open the RocksDB database
     let db = DB::open(&options, db_path)?;
     let ingest_options = IngestExternalFileOptions::default();
-
-    // Iterate over SST files in the directory
-    let sst_files = fs::read_dir(sst_dir)?
-        .filter_map(Result::ok) // Filter out any errors in reading entries
-        .filter(|entry| entry.path().extension() == Some("sst".as_ref())) // Only ".sst" files
-        .map(|entry| entry.path().to_string_lossy().to_string()) // Convert paths to strings
-        .collect::<Vec<_>>();
-
+    println!("Ingesting SST files into RocksDB at {}", db_path);
     // Ingest the SST files
-    db.ingest_external_file_opts(&ingest_options, sst_files)?;
+    db.ingest_external_file_opts(&ingest_options, vec![sst_dir])?;
 
     println!("SST files have been ingested into RocksDB at {}", db_path);
     Ok(())
